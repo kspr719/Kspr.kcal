@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Suivi calories</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calories">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F1F4F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1613" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+/* Layout : un livret en une colonne, façon étiquette nutritionnelle. Filets épais, gros chiffres condensés, journal groupé par repas. */
+:root{
+  --bg:#F1F4F0;
+  --fg:#12201A;
+  --muted:#56665F;
+  --rule:#12201A;
+  --hair:#CBD3CD;
+  --field:#FFFFFF;
+  --accent:#0A6B66;
+  --accent-fg:#FFFFFF;
+  --warn:#B23A17;
+  --font-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1613;
+    --fg:#E6EEE9;
+    --muted:#93A39B;
+    --rule:#E6EEE9;
+    --hair:#2A3731;
+    --field:#16211D;
+    --accent:#4CD0C2;
+    --accent-fg:#0A1613;
+    --warn:#F2906A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1613;
+  --fg:#E6EEE9;
+  --muted:#93A39B;
+  --rule:#E6EEE9;
+  --hair:#2A3731;
+  --field:#16211D;
+  --accent:#4CD0C2;
+  --accent-fg:#0A1613;
+  --warn:#F2906A;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font:15px/1.45 var(--font-body);
+  padding-block:20px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:30rem;margin:0 auto;display:flex;flex-direction:column;gap:30px;min-width:0}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.cap{
+  font:500 11px/1.2 var(--font-data);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.sec{border-top:3px solid var(--rule);padding-top:12px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.sec > .cap{margin:0}
+
+/* En-tête et navigation entre les jours */
+.top{display:flex;flex-direction:column;gap:10px}
+.top h1{margin:0;font:800 15px/1 var(--font-display);letter-spacing:.02em;text-transform:uppercase}
+.datenav{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:8px}
+.sq{
+  height:48px;width:48px;
+  background:var(--field);
+  border:1.5px solid var(--rule);
+  border-radius:2px;
+  font:700 22px/1 var(--font-display);
+}
+.sq:disabled{opacity:.35;cursor:default}
+.datebox{text-align:center;min-width:0}
+.date{font:700 19px/1.15 var(--font-display);text-transform:capitalize;text-wrap:balance}
+.rel{min-height:14px;margin-top:3px}
+.linkbtn{
+  background:none;border:0;padding:6px 2px;
+  color:var(--accent);
+  font:600 13px/1.2 var(--font-body);
+  text-decoration:underline;text-underline-offset:3px;
+}
+
+/* Bloc principal : ce qu'il reste */
+.hero{border-top:10px solid var(--rule);padding-top:10px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.hero .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.big{
+  font-family:var(--font-display);
+  font-weight:900;
+  font-variation-settings:"wdth" 68;
+  font-stretch:68%;
+  font-size:clamp(92px,30vw,142px);
+  line-height:.84;
+  letter-spacing:-.015em;
+  font-variant-numeric:tabular-nums;
+  margin:2px 0 4px;
+}
+.big.over{color:var(--warn)}
+.bar{height:12px;background:var(--hair);border-radius:1px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s ease}
+.bar i.over{background:var(--warn)}
+.stats{display:grid;grid-template-columns:1fr 1fr;margin:0;border-top:1px solid var(--hair)}
+.stats > div{padding:10px 0 2px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.stats > div + div{padding-left:16px;border-left:1px solid var(--hair)}
+.stats dt{margin:0}
+.stats dd{margin:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font:800 28px/1 var(--font-display);font-variation-settings:"wdth" 75;font-variant-numeric:tabular-nums}
+.stats dd .unit{font:500 11px var(--font-data);color:var(--muted);letter-spacing:.06em}
+.goalbtn{
+  background:none;border:0;padding:0;
+  font:inherit;font-variation-settings:inherit;
+  text-decoration:underline dotted;text-underline-offset:5px;
+}
+.goalform{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.goalform label{grid-column:1 / -1}
+.note{margin:0;color:var(--muted);font-size:13px;text-wrap:pretty}
+
+/* Formulaire d'ajout */
+.addform{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field.full{grid-column:1 / -1}
+input,select{
+  height:48px;width:100%;min-width:0;
+  padding:0 12px;
+  background:var(--field);
+  border:1.5px solid var(--rule);
+  border-radius:2px;
+  font-size:16px;
+}
+input::placeholder{color:var(--muted);opacity:.8}
+.primary{
+  grid-column:1 / -1;
+  min-height:50px;
+  background:var(--accent);color:var(--accent-fg);
+  border:0;border-radius:2px;
+  font:700 16px/1 var(--font-body);letter-spacing:.02em;
+}
+.goalform .primary{grid-column:auto;padding:0 18px}
+.msg{grid-column:1 / -1;margin:0;color:var(--warn);font-size:13px;min-height:0}
+.msg:empty{display:none}
+.recents{display:flex;flex-direction:column;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  background:none;
+  border:1px solid var(--rule);border-radius:999px;
+  padding:7px 12px;min-height:36px;
+  font:500 13px/1.2 var(--font-body);
+  max-width:100%;text-align:left;
+}
+.chip b{font:500 12px var(--font-data);color:var(--muted);margin-left:6px}
+
+/* Journal */
+.meal{display:flex;flex-direction:column}
+.mealhead{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:2px solid var(--rule)}
+.mealhead .cap{color:var(--fg)}
+.num{font:500 13px var(--font-data);font-variant-numeric:tabular-nums;white-space:nowrap}
+.items{list-style:none;margin:0;padding:0}
+.items li{display:grid;grid-template-columns:1fr auto 44px;align-items:center;gap:8px;border-bottom:1px solid var(--hair);min-height:46px}
+.items .nm{min-width:0;overflow-wrap:anywhere;padding:8px 0}
+.del{
+  height:44px;width:44px;
+  background:none;border:0;color:var(--muted);
+  font:400 22px/1 var(--font-body);
+}
+.del:hover{color:var(--warn)}
+.empty{margin:0;color:var(--muted);padding:6px 0}
+.totalrow{display:flex;justify-content:space-between;align-items:baseline;border-top:3px solid var(--rule);padding-top:10px}
+.totalrow strong{font:800 22px/1 var(--font-display);font-variation-settings:"wdth" 75;font-variant-numeric:tabular-nums}
+
+/* Semaine */
+.bars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.col{display:flex;flex-direction:column;gap:4px;background:none;border:0;padding:0;min-width:0}
+.val{height:14px;font:500 10px/14px var(--font-data);text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.track{position:relative;height:100px;border-bottom:2px solid var(--rule)}
+.track .fill{position:absolute;left:16%;right:16%;bottom:0;background:var(--accent);min-height:2px}
+.track .fill.over{background:var(--warn)}
+.track .fill.none{background:var(--hair)}
+.track .goal{position:absolute;left:-3px;right:-3px;border-top:1px dashed var(--muted);pointer-events:none}
+.dow{font:500 10px/1.3 var(--font-data);text-align:center;color:var(--muted);padding-bottom:3px;border-bottom:3px solid transparent;white-space:nowrap}
+.col[aria-pressed="true"] .dow{color:var(--fg);border-bottom-color:var(--fg);font-weight:500}
+
+.foot{margin:0;color:var(--muted);font-size:12.5px;text-wrap:pretty}
+
+/* Message temporaire */
+.toast{
+  position:fixed;left:0;right:0;bottom:0;
+  display:flex;justify-content:center;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  pointer-events:none;
+}
+.toast[hidden]{display:none}
+.toast > div{
+  pointer-events:auto;
+  width:100%;max-width:30rem;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  background:var(--fg);color:var(--bg);
+  padding:10px 14px;border-radius:2px;
+  font-size:14px;
+}
+.toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;padding:8px 2px;min-height:40px}
+
+@media (prefers-reduced-motion: reduce){.bar i{transition:none}}
+</style>
+
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <h1>Suivi calories</h1>
+    <nav class="datenav" aria-label="Choisir le jour">
+      <button type="button" class="sq" id="prev" aria-label="Jour précédent">‹</button>
+      <div class="datebox">
+        <div class="date" id="dateLabel">Aujourd'hui</div>
+        <div class="rel cap" id="relLabel"></div>
+      </div>
+      <button type="button" class="sq" id="next" aria-label="Jour suivant">›</button>
+    </nav>
+    <button type="button" class="linkbtn" id="todayBtn" hidden>Revenir à aujourd'hui</button>
+  </header>
+
+  <section class="hero" aria-label="Bilan du jour">
+    <div class="row"><span class="cap" id="restLabel">Reste aujourd'hui</span><span class="cap">kcal</span></div>
+    <div class="big" id="rest" aria-live="polite">1 875</div>
+    <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+    <dl class="stats">
+      <div><dt class="cap">Mangé</dt><dd><span id="eaten">0</span><span class="unit">kcal</span></dd></div>
+      <div><dt class="cap">Objectif</dt><dd><button type="button" class="goalbtn" id="goalBtn" aria-expanded="false" aria-controls="goalForm">1 875</button><span class="unit">kcal</span></dd></div>
+    </dl>
+    <form class="goalform" id="goalForm" hidden>
+      <label class="cap" for="goalInput">Nouvel objectif quotidien (kcal)</label>
+      <input id="goalInput" type="text" inputmode="numeric" autocomplete="off">
+      <button type="submit" class="primary">Enregistrer</button>
+    </form>
+    <p class="note" id="tdeeNote" hidden></p>
+  </section>
+
+  <section class="sec" aria-label="Ajouter un aliment">
+    <h2 class="cap">Ajouter un aliment</h2>
+    <form class="addform" id="addForm" autocomplete="off">
+      <div class="field full">
+        <label class="cap" for="fName">Aliment</label>
+        <input id="fName" type="text" maxlength="80" placeholder="ex. Riz basmati, 150 g">
+      </div>
+      <div class="field">
+        <label class="cap" for="fKcal">Calories</label>
+        <input id="fKcal" type="text" inputmode="decimal" placeholder="130 ou 100+30">
+      </div>
+      <div class="field">
+        <label class="cap" for="fMeal">Repas</label>
+        <select id="fMeal">
+          <option value="petit-dej">Petit-déjeuner</option>
+          <option value="dejeuner">Déjeuner</option>
+          <option value="collation">Collation</option>
+          <option value="diner">Dîner</option>
+        </select>
+      </div>
+      <p class="msg" id="formMsg" role="alert"></p>
+      <button type="submit" class="primary">Ajouter</button>
+    </form>
+    <div class="recents" id="recentsBox" hidden>
+      <span class="cap">Déjà mangés</span>
+      <div class="chips" id="chips"></div>
+    </div>
+  </section>
+
+  <section class="sec" aria-label="Journal du jour">
+    <h2 class="cap">Journal</h2>
+    <div id="log"></div>
+    <div class="totalrow"><span class="cap">Total du jour</span><strong id="totalDay">0 kcal</strong></div>
+  </section>
+
+  <section class="sec" aria-label="Les 7 derniers jours">
+    <h2 class="cap">7 derniers jours · trait pointillé = objectif</h2>
+    <div class="bars" id="weekBars"></div>
+  </section>
+
+  <p class="foot" id="footNote">Les calories des aliments sont des estimations.</p>
+</main>
+
+<div class="toast" id="toast" hidden role="status">
+  <div><span id="toastMsg"></span><button type="button" id="toastAct" hidden></button></div>
+</div>
+
+<script>
+(function(){
+  var COLL = "tracker";
+  var LS_KEY = "suivi-calories-v1";
+  var DOW = ["dim","lun","mar","mer","jeu","ven","sam"];
+  var MEALS = [
+    {id:"petit-dej", label:"Petit-déjeuner"},
+    {id:"dejeuner", label:"Déjeuner"},
+    {id:"collation", label:"Collation"},
+    {id:"diner", label:"Dîner"}
+  ];
+
+  function $(id){ return document.getElementById(id); }
+  function pad(n){ return n < 10 ? "0" + n : "" + n; }
+  function fmt(d){ return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parseDate(s){ var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function shift(s, n){ var d = parseDate(s); d.setDate(d.getDate() + n); return fmt(d); }
+  function todayStr(){ return fmt(new Date()); }
+  function defaultMeal(){ var h = new Date().getHours(); return h < 10 ? "petit-dej" : h < 15 ? "dejeuner" : h < 18 ? "collation" : "diner"; }
+  function nf(n){ return Math.round(n).toLocaleString("fr-FR"); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function sum(items){ var t = 0; for (var i = 0; i < items.length; i++) t += items[i].kcal; return t; }
+
+  var state = {
+    days: {},
+    goal: 1875,
+    tdee: null,
+    loaded: false,
+    mode: "pending",
+    date: todayStr()
+  };
+  var dbRef = null;
+  var writeQ = {};
+
+  var el = {
+    dateLabel: $("dateLabel"), relLabel: $("relLabel"), prev: $("prev"), next: $("next"), todayBtn: $("todayBtn"),
+    restLabel: $("restLabel"), rest: $("rest"), barFill: $("barFill"), eaten: $("eaten"),
+    goalBtn: $("goalBtn"), goalForm: $("goalForm"), goalInput: $("goalInput"), tdeeNote: $("tdeeNote"),
+    addForm: $("addForm"), fName: $("fName"), fKcal: $("fKcal"), fMeal: $("fMeal"), formMsg: $("formMsg"),
+    recentsBox: $("recentsBox"), chips: $("chips"), log: $("log"), totalDay: $("totalDay"),
+    weekBars: $("weekBars"), footNote: $("footNote"),
+    toast: $("toast"), toastMsg: $("toastMsg"), toastAct: $("toastAct")
+  };
+  el.fMeal.value = defaultMeal();
+
+  /* ---------- Stockage ---------- */
+  function saveLocal(){
+    try { localStorage.setItem(LS_KEY, JSON.stringify({days: state.days, goal: state.goal})); } catch (e) {}
+  }
+  function loadLocal(){
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      var v = JSON.parse(raw);
+      if (v && v.days) state.days = v.days;
+      if (v && v.goal) state.goal = Number(v.goal) || state.goal;
+    } catch (e) {}
+  }
+  function clean(items){
+    var out = [];
+    if (!Array.isArray(items)) return out;
+    items.forEach(function(it){
+      if (!it) return;
+      var k = Number(it.kcal);
+      if (!isFinite(k)) return;
+      out.push({
+        id: String(it.id || uid()),
+        name: String(it.name || "Aliment").slice(0, 80),
+        kcal: k,
+        meal: it.meal || "collation",
+        t: Number(it.t) || 0
+      });
+    });
+    return out;
+  }
+  function enqueue(docId, body){
+    if (!dbRef) return;
+    var ref = dbRef.collection(COLL).doc(docId);
+    var prev = writeQ[docId] || Promise.resolve();
+    writeQ[docId] = prev.then(function(){ return ref.set(body); }).catch(function(){
+      toast("Enregistrement impossible. Réessaie dans un instant.");
+    });
+  }
+  function persistDay(date){
+    if (state.mode === "db") enqueue("d-" + date, {date: date, items: state.days[date] || []});
+    else saveLocal();
+  }
+  function persistSettings(){
+    if (state.mode === "db") {
+      var body = {goal: state.goal};
+      if (state.tdee) body.tdee = state.tdee;
+      enqueue("settings", body);
+    } else saveLocal();
+  }
+  function dayItems(date){ return state.days[date] || []; }
+  function commitDay(date, items){
+    state.days[date] = items;
+    render();
+    persistDay(date);
+  }
+
+  /* ---------- Message temporaire ---------- */
+  var toastTimer;
+  function hideToast(){ el.toast.hidden = true; clearTimeout(toastTimer); }
+  function toast(msg, label, fn){
+    el.toastMsg.textContent = msg + (label ? " " : "");
+    el.toastAct.hidden = !label;
+    el.toastAct.textContent = label || "";
+    el.toastAct.onclick = function(){ hideToast(); if (fn) fn(); };
+    el.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+
+  /* ---------- Affichage ---------- */
+  function node(tag, cls, text){
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function renderLog(items){
+    el.log.textContent = "";
+    if (!state.loaded) { el.log.appendChild(node("p", "empty", "Chargement du journal…")); return; }
+    if (!items.length) {
+      el.log.appendChild(node("p", "empty", "Rien d'ajouté pour ce jour. Entre un aliment et ses calories ci-dessus."));
+      return;
+    }
+    var wrap = node("div");
+    wrap.style.display = "flex"; wrap.style.flexDirection = "column"; wrap.style.gap = "18px";
+    MEALS.forEach(function(m){
+      var list = items.filter(function(it){ return (it.meal || "collation") === m.id; });
+      if (!list.length) return;
+      var meal = node("div", "meal");
+      var head = node("div", "mealhead");
+      head.appendChild(node("span", "cap", m.label));
+      head.appendChild(node("span", "num", nf(sum(list)) + " kcal"));
+      meal.appendChild(head);
+      var ul = node("ul", "items");
+      list.forEach(function(it){
+        var li = node("li");
+        li.appendChild(node("span", "nm", it.name));
+        li.appendChild(node("span", "num", nf(it.kcal)));
+        var b = node("button", "del", "×");
+        b.type = "button";
+        b.setAttribute("aria-label", "Supprimer " + it.name);
+        b.addEventListener("click", function(){ removeItem(it.id); });
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+      meal.appendChild(ul);
+      wrap.appendChild(meal);
+    });
+    el.log.appendChild(wrap);
+  }
+
+  function renderRecents(){
+    var all = [], seen = {}, list = [];
+    Object.keys(state.days).forEach(function(d){ state.days[d].forEach(function(it){ all.push(it); }); });
+    all.sort(function(a, b){ return (b.t || 0) - (a.t || 0); });
+    all.forEach(function(it){
+      var k = it.name.toLowerCase() + "|" + it.kcal;
+      if (!seen[k] && list.length < 8) { seen[k] = 1; list.push(it); }
+    });
+    el.chips.textContent = "";
+    el.recentsBox.hidden = list.length === 0;
+    list.forEach(function(it){
+      var b = node("button", "chip", it.name);
+      b.type = "button";
+      b.appendChild(node("b", null, nf(it.kcal)));
+      b.addEventListener("click", function(){
+        el.fName.value = it.name;
+        el.fKcal.value = String(it.kcal);
+        el.formMsg.textContent = "";
+        el.fKcal.focus();
+      });
+      el.chips.appendChild(b);
+    });
+  }
+
+  function renderWeek(){
+    var dates = [], totals = [], i;
+    for (i = 6; i >= 0; i--) dates.push(shift(state.date, -i));
+    totals = dates.map(function(d){ return sum(dayItems(d)); });
+    var max = Math.max(state.goal * 1.2, Math.max.apply(null, totals), 1);
+    el.weekBars.textContent = "";
+    dates.forEach(function(d, idx){
+      var t = totals[idx];
+      var has = dayItems(d).length > 0;
+      var dt = parseDate(d);
+      var col = node("button", "col");
+      col.type = "button";
+      col.setAttribute("aria-pressed", d === state.date ? "true" : "false");
+      col.setAttribute("aria-label",
+        new Intl.DateTimeFormat("fr-FR", {weekday: "long", day: "numeric", month: "long"}).format(dt) +
+        (has ? " : " + nf(t) + " kcal" : " : rien d'enregistré"));
+      col.appendChild(node("div", "val", has ? String(Math.round(t)) : "–"));
+      var track = node("div", "track");
+      var fill = node("div", "fill" + (!has ? " none" : t > state.goal ? " over" : ""));
+      fill.style.height = (has ? Math.max(t / max * 100, 2) : 0) + "%";
+      track.appendChild(fill);
+      var g = node("i", "goal");
+      g.style.bottom = (state.goal / max * 100) + "%";
+      track.appendChild(g);
+      col.appendChild(track);
+      col.appendChild(node("div", "dow", DOW[dt.getDay()] + " " + dt.getDate()));
+      col.addEventListener("click", function(){ state.date = d; render(); });
+      el.weekBars.appendChild(col);
+    });
+  }
+
+  function render(){
+    var items = dayItems(state.date);
+    var eaten = sum(items);
+    var left = state.goal - eaten;
+    var today = todayStr();
+    var isToday = state.date === today;
+    var diff = Math.round((parseDate(state.date) - parseDate(today)) / 864e5);
+
+    el.dateLabel.textContent = new Intl.DateTimeFormat("fr-FR", {weekday: "long", day: "numeric", month: "long"}).format(parseDate(state.date));
+    el.relLabel.textContent = diff === 0 ? "Aujourd'hui" : diff === -1 ? "Hier" : "";
+    el.next.disabled = state.date >= today;
+    el.todayBtn.hidden = isToday;
+
+    el.restLabel.textContent = left < 0 ? "Au-dessus de l'objectif" : isToday ? "Reste aujourd'hui" : "Sous l'objectif";
+    el.rest.textContent = nf(Math.abs(left));
+    el.rest.classList.toggle("over", left < 0);
+    el.barFill.style.width = Math.min(100, state.goal > 0 ? eaten / state.goal * 100 : 0) + "%";
+    el.barFill.classList.toggle("over", left < 0);
+    el.eaten.textContent = nf(eaten);
+    el.goalBtn.textContent = nf(state.goal);
+    el.totalDay.textContent = nf(eaten) + " kcal";
+
+    if (state.tdee && state.tdee > state.goal) {
+      el.tdeeNote.hidden = false;
+      el.tdeeNote.textContent = "Dépense estimée : " + nf(state.tdee) + " kcal par jour. Avec cet objectif, le déficit prévu est d'environ " + nf(state.tdee - state.goal) + " kcal par jour.";
+    } else {
+      el.tdeeNote.hidden = true;
+    }
+
+    el.footNote.textContent = state.mode === "local"
+      ? "Mode local : les données restent sur cet appareil. Les calories des aliments sont des estimations."
+      : "Les calories des aliments sont des estimations.";
+
+    renderLog(items);
+    renderRecents();
+    renderWeek();
+  }
+
+  /* ---------- Actions ---------- */
+  function parseKcal(s){
+    s = String(s).replace(/,/g, ".").replace(/\s/g, "");
+    if (!/^\d+(\.\d+)?(\+\d+(\.\d+)?)*$/.test(s)) return NaN;
+    return Math.round(s.split("+").reduce(function(a, b){ return a + parseFloat(b); }, 0));
+  }
+
+  el.addForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var k = parseKcal(el.fKcal.value);
+    if (!(k > 0 && k <= 5000)) {
+      el.formMsg.textContent = "Entre un nombre de calories, par exemple 130 ou 100+30.";
+      el.fKcal.focus();
+      return;
+    }
+    el.formMsg.textContent = "";
+    var item = {
+      id: uid(),
+      name: (el.fName.value.trim() || "Aliment").slice(0, 80),
+      kcal: k,
+      meal: el.fMeal.value,
+      t: Date.now()
+    };
+    commitDay(state.date, dayItems(state.date).concat([item]));
+    el.fName.value = "";
+    el.fKcal.value = "";
+    el.fName.focus();
+  });
+
+  function removeItem(id){
+    var date = state.date;
+    var items = dayItems(date);
+    var idx = -1;
+    items.forEach(function(it, i){ if (it.id === id) idx = i; });
+    if (idx < 0) return;
+    var removed = items[idx];
+    commitDay(date, items.filter(function(it){ return it.id !== id; }));
+    toast("« " + removed.name + " » supprimé.", "Annuler", function(){
+      var cur = dayItems(date).slice();
+      cur.splice(Math.min(idx, cur.length), 0, removed);
+      commitDay(date, cur);
+    });
+  }
+
+  el.prev.addEventListener("click", function(){ state.date = shift(state.date, -1); render(); });
+  el.next.addEventListener("click", function(){
+    if (state.date < todayStr()) { state.date = shift(state.date, 1); render(); }
+  });
+  el.todayBtn.addEventListener("click", function(){ state.date = todayStr(); render(); });
+
+  el.goalBtn.addEventListener("click", function(){
+    var open = el.goalForm.hidden;
+    el.goalForm.hidden = !open;
+    el.goalBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) { el.goalInput.value = String(state.goal); el.goalInput.focus(); el.goalInput.select(); }
+  });
+  el.goalForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var n = parseInt(String(el.goalInput.value).replace(/\s/g, ""), 10);
+    if (!(n >= 500 && n <= 8000)) { toast("Entre un objectif entre 500 et 8 000 kcal."); return; }
+    state.goal = n;
+    el.goalForm.hidden = true;
+    el.goalBtn.setAttribute("aria-expanded", "false");
+    render();
+    persistSettings();
+  });
+
+  /* ---------- Démarrage ---------- */
+  render();
+
+  function startLocal(){
+    state.mode = "local";
+    loadLocal();
+    state.loaded = true;
+    render();
+  }
+
+  startLocal();
+})();
+</script>
+</body>
+</html>
